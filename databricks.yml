@@ -1,0 +1,19 @@
+bundle:
+  name: manufacturing-line-lakebase-demo
+
+include:
+  - resources/*.yml
+
+resources:
+  apps:
+    manufacturing-line-demo:
+      name: "manufacturing-line-demo"
+      source_code_path: .
+
+# #workspace:
+# #  host: https://myworkspace.databricks.com
+
+targets:
+  dev:
+    default: true
+    mode: development

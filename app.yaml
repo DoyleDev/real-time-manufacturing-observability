@@ -1,0 +1,30 @@
+command: ["uvicorn", "app:app"]
+
+env:
+  - name: 'LAKEBASE_INSTANCE_NAME'
+    value: 'gdoyle-fastapi-demo'
+  - name: 'LAKEBASE_DATABASE_NAME'
+    value: 'gdoyle-database'
+  - name: 'DATABRICKS_DATABASE_PORT'
+    value: '5432'
+
+  - name: 'DEFAULT_POSTGRES_SCHEMA'
+    value: 'public'
+  - name: 'DEFAULT_POSTGRES_TABLE'
+    value: 'machine_feed_stream'
+
+  - name: 'ENABLE_SIMULATOR'
+    value: 'true'
+  - name: 'SIMULATOR_INTERVAL'
+    value: '5'
+
+  - name: 'DB_POOL_SIZE'
+    value: '5'
+  - name: 'DB_MAX_OVERFLOW'
+    value: '10'
+  - name: 'DB_COMMAND_TIMEOUT'
+    value: '30'
+  - name: 'DB_POOL_TIMEOUT'
+    value: '10'
+  - name: 'DB_POOL_RECYCLE_INTERVAL'
+    value: '3600'

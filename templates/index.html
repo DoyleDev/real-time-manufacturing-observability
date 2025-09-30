@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manufacturing Line Observability</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=1759261890">
+</head>
+<body>
+    <!-- Clean Header with Compact Status -->
+    <header class="header">
+        <div class="connection-status">
+            <div id="status" class="status-indicator disconnected">
+                <span class="status-dot"></span>
+                <span class="status-text">Disconnected</span>
+            </div>
+        </div>
+        <h1>Manufacturing Line Observability</h1>
+        <nav class="navigation-tabs">
+            <button class="nav-tab active" data-tab="home">Home</button>
+            <button class="nav-tab" data-tab="work-orders">Work Orders</button>
+            <button class="nav-tab" data-tab="reports">Reports</button>
+        </nav>
+    </header>
+
+    <!-- Tab Content Areas -->
+
+    <!-- Home Tab (Manufacturing Floor) -->
+    <div id="home-tab" class="tab-content active">
+        <!-- Machine Floor Visualization -->
+        <div class="machine-floor">
+            <div id="machine-floor-container">
+                <!-- Machine lines will be dynamically rendered here -->
+            </div>
+        </div>
+
+        <!-- Real-time Data Feed -->
+        <div class="realtime-data">
+            <div class="data-title">Real-time Data Stream</div>
+            <div id="messages"></div>
+        </div>
+    </div>
+
+    <!-- Work Orders Tab -->
+    <div id="work-orders-tab" class="tab-content">
+        <div class="content-container">
+            <div class="content-header">
+                <h2>Work Orders</h2>
+                <div class="work-order-stats">
+                    <span class="stat-item">
+                        <span class="stat-label">Open:</span>
+                        <span id="open-count" class="stat-value">-</span>
+                    </span>
+                    <span class="stat-item">
+                        <span class="stat-label">In Progress:</span>
+                        <span id="in-progress-count" class="stat-value">-</span>
+                    </span>
+                    <span class="stat-item">
+                        <span class="stat-label">Completed:</span>
+                        <span id="completed-count" class="stat-value">-</span>
+                    </span>
+                </div>
+            </div>
+
+            <div class="work-orders-filters">
+                <div class="filter-group">
+                    <label for="status-filter">Status:</label>
+                    <select id="status-filter">
+                        <option value="">All Statuses</option>
+                        <option value="open">Open</option>
+                        <option value="in-progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="priority-filter">Priority:</label>
+                    <select id="priority-filter">
+                        <option value="">All Priorities</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="machine-filter">Machine:</label>
+                    <input type="text" id="machine-filter" placeholder="Filter by machine name...">
+                </div>
+                <div class="filter-group">
+                    <label for="assignee-filter">Assignee:</label>
+                    <select id="assignee-filter">
+                        <option value="">All Assignees</option>
+                        <!-- Options will be populated dynamically -->
+                    </select>
+                </div>
+                <div class="filter-actions">
+                    <button id="clear-filters" class="btn btn-secondary">Clear Filters</button>
+                </div>
+            </div>
+
+            <div class="work-orders-table-container">
+                <table id="work-orders-table" class="work-orders-table">
+                    <thead>
+                        <tr>
+                            <th>Work Order ID</th>
+                            <th>Machine</th>
+                            <th>Issue Description</th>
+                            <th>Priority</th>
+                            <th>Reporter</th>
+                            <th>Assignee</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="loading-row">
+                            <td colspan="8" style="text-align: center; padding: 40px;">
+                                Loading work orders...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reports Tab -->
+    <div id="reports-tab" class="tab-content">
+        <div class="content-container">
+            <div class="content-header">
+                <h2>Reports</h2>
+            </div>
+            <div class="reports-placeholder">
+                <div class="placeholder-content">
+                    <h3>📊 Reports Coming Soon</h3>
+                    <p>Advanced reporting and analytics features will be available here.</p>
+                    <ul>
+                        <li>Machine performance metrics</li>
+                        <li>Work order completion rates</li>
+                        <li>Downtime analysis</li>
+                        <li>Production efficiency reports</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Machine Details Modal -->
+    <div id="machine-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-machine-name">Machine Details</h2>
+                <span class="close-modal">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="machine-info">
+                    <div class="info-row">
+                        <span class="info-label">Line:</span>
+                        <span id="modal-machine-line">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Type:</span>
+                        <span id="modal-machine-type">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Status:</span>
+                        <span id="modal-machine-status" class="status-badge">-</span>
+                    </div>
+                </div>
+
+                <!-- Work Order Button (only shown for down machines) -->
+                <div id="work-order-section" class="work-order-section" style="display: none;">
+                    <button id="create-work-order-btn" class="btn btn-primary">
+                        🔧 Create Work Form
+                    </button>
+                </div>
+
+                <!-- Work Order Form (initially hidden) -->
+                <div id="work-order-form" class="work-order-form" style="display: none;">
+                    <h3>Create Work Order</h3>
+                    <form id="work-order-form-element">
+                        <div class="form-group">
+                            <label for="issue-description">Issue Description *</label>
+                            <textarea id="issue-description" name="issue_description" rows="4"
+                                placeholder="Describe the problem with the machine..." required></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="priority">Priority</label>
+                            <select id="priority" name="priority">
+                                <option value="low">Low</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="reporter-name">Reporter Name *</label>
+                            <input type="text" id="reporter-name" name="reporter_name"
+                                placeholder="Your name" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="assignee">Assignee</label>
+                            <select id="assignee" name="assignee">
+                                <option value="">Select employee (optional)</option>
+                                <!-- Employee options will be populated dynamically -->
+                            </select>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-success">Create Work Order</button>
+                            <button type="button" id="cancel-work-order" class="btn btn-secondary">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Success Message -->
+                <div id="work-order-success" class="success-message" style="display: none;">
+                    <div class="success-icon">✅</div>
+                    <h3>Work Order Created!</h3>
+                    <p id="success-message-text">Work order has been created successfully.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/websocket.js?v=1759261890"></script>
+    <script src="/static/js/machine-floor.js?v=1759261890"></script>
+    <script src="/static/js/work-orders.js?v=1759261890"></script>
+</body>
+</html>
