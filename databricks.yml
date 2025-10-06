@@ -31,8 +31,10 @@ resources:
     manufacturing-line-dashboard:
       display_name: "manufacturing-line-dashboard"
       file_path: Manufacturing Line Dashboard.lvdash.json
-      warehouse_id: 4b9b953939869799
-
+      warehouse_id: <warehouse_id>
+################
+# databricks bundle deploy -t dev -p DEMO
+################
 targets:
   dev:
     default: true
