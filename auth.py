@@ -184,6 +184,9 @@ def get_connection_params() -> dict:
         or None
     )
 
+    # Get schema from environment variable
+    schema = os.getenv("DEFAULT_POSTGRES_SCHEMA", "public")
+
     return {
         "host": database_instance.read_write_dns,
         "port": int(os.getenv("DATABRICKS_DATABASE_PORT", "5432")),
@@ -191,4 +194,5 @@ def get_connection_params() -> dict:
         "password": postgres_password,
         "database": database_name,
         "ssl": "require",
+        "server_settings": {"search_path": schema},
     }
