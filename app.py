@@ -223,7 +223,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 async def get(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    dashboard_url = os.getenv("DASHBOARD_EMBED_URL")
+    return templates.TemplateResponse("index.html", {"request": request, "dashboard_url": dashboard_url})
 
 
 @app.get("/api/machines")

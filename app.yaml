@@ -2,16 +2,19 @@ command: ["uvicorn", "app:app"]
 
 env:
   - name: 'LAKEBASE_INSTANCE_NAME'
-    value: 'fe_shared_demo'
+    value: 'mfg-fe-demo'
   - name: 'LAKEBASE_DATABASE_NAME'
-    value: 'mfg_fe_demo'
+    value: 'mfg-demo-database'
   - name: 'DATABRICKS_DATABASE_PORT'
     value: '5432'
 
   - name: 'DEFAULT_POSTGRES_SCHEMA'
-    value: 'manufacturing_line'
+    value: 'public'
   - name: 'DEFAULT_POSTGRES_TABLE'
     value: 'machine_feed_stream'
+
+  - name: 'DASHBOARD_EMBED_URL'
+    value: '<your-embed-url-here>'
 
   - name: 'ENABLE_SIMULATOR'
     value: 'true'

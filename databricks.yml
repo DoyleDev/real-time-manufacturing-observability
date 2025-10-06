@@ -5,32 +5,34 @@ include:
   - resources/*.yml
 
 resources:
-  # database_catalogs:
-  #   catalog:
-  #     database_instance_name: fe_shared_demo
-  #     database_name: mfg-demo-database
-  #     name: mfg-demo-catalog
-  #     create_database_if_not_exists: true
+  database_instances:
+    instance:
+      name: mfg-fe-demo
+      capacity: CU_2
+  database_catalogs:
+    catalog:
+      database_instance_name: ${resources.database_instances.instance.name}
+      database_name: mfg-demo-database
+      name: mfg-fe-demo-catalog
+      create_database_if_not_exists: true
   apps:
     manufacturing-line-demo:
       name: "manufacturing-line-demo"
       description: "Demo real time streaming updates from Lakebase to an Application leveraging postgres Listen/Notify and fastApi websockets"
       source_code_path: .
       resources:
-        - name: "app-db"
+        - name: "app-database"
           description: "A database for the app to be able to connect to and query"
           database:
-            database_name: mfg_fe_demo
-            instance_name: fe_shared_demo
+            database_name: ${resources.database_catalogs.catalog.database_name}
+            instance_name: ${resources.database_instances.instance.name}
             permission: "CAN_CONNECT_AND_CREATE"
-# #workspace:
-# #  host: https://myworkspace.databricks.com
+  dashboards:
+    manufacturing-line-dashboard:
+      display_name: "manufacturing-line-dashboard"
+      file_path: Manufacturing Line Dashboard.lvdash.json
+      warehouse_id: 4b9b953939869799
 
-# databricks bundle deploy -t dev -p demo_west
-
-#################
-# 2025-10-03 21:55:12,591 - app - ERROR - Failed to get current machine status: permission denied for table machine_feed_stream
-#################
 targets:
   dev:
     default: true

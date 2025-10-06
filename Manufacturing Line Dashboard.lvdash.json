@@ -1,0 +1,627 @@
+{
+  "datasets": [
+    {
+      "name": "29939610",
+      "displayName": "dashboard_current_machine_status",
+      "queryLines": [
+        "SELECT * FROM `mfg-fe-demo-catalog`.public.dashboard_current_machine_status"
+      ]
+    },
+    {
+      "name": "7af97606",
+      "displayName": "dashboard_executive_kpis",
+      "queryLines": [
+        "SELECT * FROM `mfg-fe-demo-catalog`.public.dashboard_executive_kpis"
+      ]
+    },
+    {
+      "name": "a3e6b79c",
+      "displayName": "dashboard_hourly_status_patterns",
+      "queryLines": [
+        "SELECT * FROM `mfg-fe-demo-catalog`.public.dashboard_hourly_status_patterns"
+      ]
+    },
+    {
+      "name": "1ae80e7b",
+      "displayName": "dashboard_machine_status_changes_7days",
+      "queryLines": [
+        "SELECT * FROM `mfg-fe-demo-catalog`.public.dashboard_machine_status_changes_7days"
+      ]
+    },
+    {
+      "name": "f88d1841",
+      "displayName": "dashboard_machine_uptime_7days",
+      "queryLines": [
+        "SELECT * FROM `mfg-fe-demo-catalog`.public.dashboard_machine_uptime_7days"
+      ]
+    },
+    {
+      "name": "3f0c8ae1",
+      "displayName": "dashboard_machine_uptime_days",
+      "queryLines": [
+        "SELECT * FROM `mfg-fe-demo-catalog`.public.dashboard_machine_uptime_days"
+      ]
+    },
+    {
+      "name": "dc996625",
+      "displayName": "dashboard_problematic_machines_30days",
+      "queryLines": [
+        "SELECT * FROM `mfg-fe-demo-catalog`.public.dashboard_problematic_machines_30days"
+      ]
+    },
+    {
+      "name": "91734afe",
+      "displayName": "dashboard_work_order_status_summary",
+      "queryLines": [
+        "SELECT * FROM `mfg-fe-demo-catalog`.public.dashboard_work_order_status_summary"
+      ]
+    },
+    {
+      "name": "f8420d23",
+      "displayName": "dashboard_work_order_trends_30days",
+      "queryLines": [
+        "SELECT * FROM `mfg-fe-demo-catalog`.public.dashboard_work_order_trends_30days"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "9dbcc97b",
+      "displayName": "Untitled page",
+      "layout": [
+        {
+          "widget": {
+            "name": "b22015df",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "29939610",
+                  "fields": [
+                    {
+                      "name": "sum(machine_count)",
+                      "expression": "SUM(`machine_count`)"
+                    },
+                    {
+                      "name": "equipment_type",
+                      "expression": "`equipment_type`"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "pie",
+              "encodings": {
+                "angle": {
+                  "fieldName": "sum(machine_count)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Sum of machine_count"
+                },
+                "color": {
+                  "fieldName": "equipment_type",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "equipment_type"
+                },
+                "label": {
+                  "show": true
+                }
+              },
+              "frame": {
+                "title": "Equipment Type Distribution",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "4de30400",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f88d1841",
+                  "fields": [
+                    {
+                      "name": "avg(uptime_percentage)",
+                      "expression": "AVG(`uptime_percentage`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "avg(uptime_percentage)",
+                  "displayName": "Average uptime_percentage"
+                }
+              },
+              "frame": {
+                "title": "Machine Uptime Percentage",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 2,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "411cf165",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f88d1841",
+                  "fields": [
+                    {
+                      "name": "machine_name",
+                      "expression": "`machine_name`"
+                    },
+                    {
+                      "name": "sum(operational_hours)",
+                      "expression": "SUM(`operational_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "machine_name",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  },
+                  "displayName": "machine_name"
+                },
+                "y": {
+                  "fieldName": "sum(operational_hours)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Sum of operational_hours"
+                },
+                "color": {
+                  "fieldName": "machine_name",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "machine_name"
+                }
+              },
+              "frame": {
+                "title": "Operational Hours by Machine",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 9,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "5eb076bc",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f88d1841",
+                  "fields": [
+                    {
+                      "name": "production_line",
+                      "expression": "`production_line`"
+                    },
+                    {
+                      "name": "avg(uptime_percentage)",
+                      "expression": "AVG(`uptime_percentage`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "production_line",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  },
+                  "displayName": "production_line"
+                },
+                "y": {
+                  "fieldName": "avg(uptime_percentage)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Average uptime_percentage"
+                },
+                "color": {
+                  "fieldName": "production_line",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "production_line"
+                }
+              },
+              "frame": {
+                "title": "Uptime Percentage by Production Line",
+                "showTitle": true
+              },
+              "mark": {
+                "colors": [
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 3
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 2
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 3
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 4
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 5
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 6
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 7
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 8
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 9
+                  },
+                  {
+                    "themeColorType": "visualizationColors",
+                    "position": 10
+                  }
+                ]
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 3,
+            "width": 3,
+            "height": 6
+          }
+        },
+        {
+          "widget": {
+            "name": "e1bf0f91",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "dc996625",
+                  "fields": [
+                    {
+                      "name": "count(downtime_incidents)",
+                      "expression": "COUNT(`downtime_incidents`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "count(downtime_incidents)",
+                  "displayName": "Count of downtime_incidents"
+                }
+              },
+              "frame": {
+                "title": "Count of Incidents",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 0,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "5bf14562",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f88d1841",
+                  "fields": [
+                    {
+                      "name": "count(machine_name)",
+                      "expression": "COUNT(`machine_name`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "count(machine_name)",
+                  "displayName": "Count of machine_name"
+                }
+              },
+              "frame": {
+                "title": "Count of work orders",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 0,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "85169038",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "91734afe",
+                  "fields": [
+                    {
+                      "name": "count(order_count)",
+                      "expression": "COUNT(`order_count`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "count(order_count)",
+                  "displayName": "Count of order_count"
+                }
+              },
+              "frame": {
+                "title": "Count of Open Work Orders",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 5,
+            "y": 0,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "fba3c742",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f88d1841",
+                  "fields": [
+                    {
+                      "name": "sum(downtime_hours)",
+                      "expression": "SUM(`downtime_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(downtime_hours)",
+                  "displayName": "Sum of downtime_hours"
+                }
+              },
+              "frame": {
+                "title": "Total downtime in hours",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 2,
+            "y": 0,
+            "width": 1,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "98a1d4ed",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "f88d1841",
+                  "fields": [
+                    {
+                      "name": "machine_name",
+                      "expression": "`machine_name`"
+                    },
+                    {
+                      "name": "sum(downtime_hours)",
+                      "expression": "SUM(`downtime_hours`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "bar",
+              "encodings": {
+                "x": {
+                  "fieldName": "machine_name",
+                  "scale": {
+                    "type": "categorical",
+                    "sort": {
+                      "by": "y-reversed"
+                    }
+                  },
+                  "displayName": "machine_name"
+                },
+                "y": {
+                  "fieldName": "sum(downtime_hours)",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "Sum of downtime_hours"
+                },
+                "color": {
+                  "fieldName": "machine_name",
+                  "scale": {
+                    "type": "categorical"
+                  },
+                  "displayName": "machine_name"
+                }
+              },
+              "frame": {
+                "title": "Downtime Hours by Machine",
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 3,
+            "y": 9,
+            "width": 3,
+            "height": 6
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_CANVAS"
+    },
+    {
+      "name": "6ecf8fdd",
+      "displayName": "Global Filters",
+      "layout": [
+        {
+          "widget": {
+            "name": "41556bd8",
+            "queries": [
+              {
+                "name": "dashboards/01f067413fef1a2881605cfde2764635/datasets/01f067414f921aec8720757331cf109f_machine_name",
+                "query": {
+                  "datasetName": "f88d1841",
+                  "fields": [
+                    {
+                      "name": "machine_name",
+                      "expression": "`machine_name`"
+                    },
+                    {
+                      "name": "machine_name_associativity",
+                      "expression": "COUNT_IF(`associative_filter_predicate_group`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "filter-single-select",
+              "encodings": {
+                "fields": [
+                  {
+                    "fieldName": "machine_name",
+                    "displayName": "machine_name",
+                    "queryName": "dashboards/01f067413fef1a2881605cfde2764635/datasets/01f067414f921aec8720757331cf109f_machine_name"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 1,
+            "height": 2
+          }
+        }
+      ],
+      "pageType": "PAGE_TYPE_GLOBAL_FILTERS"
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "widgetHeaderAlignment": "ALIGNMENT_UNSPECIFIED"
+    }
+  }
+}

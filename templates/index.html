@@ -126,19 +126,25 @@
     <div id="reports-tab" class="tab-content">
         <div class="content-container">
             <div class="content-header">
-                <h2>Reports</h2>
+                <h2>Reports Dashboard</h2>
             </div>
-            <div class="reports-placeholder">
-                <div class="placeholder-content">
-                    <h3>📊 Reports Coming Soon</h3>
-                    <p>Advanced reporting and analytics features will be available here.</p>
-                    <ul>
-                        <li>Machine performance metrics</li>
-                        <li>Work order completion rates</li>
-                        <li>Downtime analysis</li>
-                        <li>Production efficiency reports</li>
-                    </ul>
+            <div class="reports-content">
+                {% if dashboard_url %}
+                <iframe
+                    src="{{ dashboard_url }}"
+                    width="100%"
+                    height="1000"
+                    frameborder="0"
+                    style="border: none; border-radius: 8px;">
+                </iframe>
+                {% else %}
+                <div class="reports-placeholder">
+                    <div class="placeholder-content">
+                        <h3>📊 Dashboard Not Configured</h3>
+                        <p>Please set the DASHBOARD_EMBED_URL environment variable to display the dashboard.</p>
+                    </div>
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
