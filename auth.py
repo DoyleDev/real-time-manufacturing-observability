@@ -24,6 +24,7 @@ database_instance = None
 postgres_password: Optional[str] = None
 last_password_refresh: float = 0
 token_refresh_task: Optional[asyncio.Task] = None
+token_refresh_event: Optional[asyncio.Event] = None
 
 
 async def initialize_databricks_client():
@@ -77,6 +78,7 @@ async def generate_fresh_token():
 
 async def refresh_token_background():
     """Background task to refresh tokens every 50 minutes"""
+    global token_refresh_event
     retry_count = 0
     max_retries = 3
 
@@ -88,6 +90,11 @@ async def refresh_token_background():
             await generate_fresh_token()
             retry_count = 0  # Reset retry count on success
             logger.info("Background token refresh: Token updated successfully")
+
+            # Signal that token was refreshed so listeners can reconnect
+            if token_refresh_event:
+                token_refresh_event.set()
+                logger.info("Background token refresh: Signaled database reconnection needed")
 
         except asyncio.CancelledError:
             logger.info("Background token refresh task cancelled")
@@ -107,7 +114,11 @@ async def refresh_token_background():
 
 async def start_token_refresh():
     """Start the background token refresh task"""
-    global token_refresh_task
+    global token_refresh_task, token_refresh_event
+
+    # Create event for signaling token refresh
+    if token_refresh_event is None:
+        token_refresh_event = asyncio.Event()
 
     # Generate initial token if not already done
     if postgres_password is None:
@@ -167,6 +178,11 @@ def get_database_instance():
 def get_workspace_client() -> Optional[WorkspaceClient]:
     """Get the current workspace client"""
     return workspace_client
+
+
+def get_token_refresh_event() -> Optional[asyncio.Event]:
+    """Get the token refresh event for monitoring token updates"""
+    return token_refresh_event
 
 
 def get_connection_params() -> dict:

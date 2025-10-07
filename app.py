@@ -9,6 +9,7 @@ import asyncpg
 from auth import (
     check_database_exists,
     get_connection_params,
+    get_token_refresh_event,
     initialize_databricks_client,
     start_token_refresh,
     stop_token_refresh,
@@ -112,6 +113,7 @@ async def ensure_db_connection():
 
 async def listen_for_changes():
     """Listen for PostgreSQL notifications and broadcast to WebSocket clients"""
+    token_event = get_token_refresh_event()
 
     while True:
         try:
@@ -121,8 +123,28 @@ async def listen_for_changes():
 
             while True:
                 try:
-                    await asyncio.sleep(1)
-                    if time.time() % 30 == 0:
+                    # Check if token was refreshed
+                    if token_event:
+                        try:
+                            await asyncio.wait_for(token_event.wait(), timeout=1.0)
+                            # Token was refreshed, need to reconnect
+                            logger.info("Token refresh detected, reconnecting database listener...")
+                            token_event.clear()
+
+                            # Close current connection
+                            if conn and not conn.is_closed():
+                                await conn.close()
+
+                            # Break inner loop to reconnect with new token
+                            break
+                        except asyncio.TimeoutError:
+                            # No token refresh, continue normal operation
+                            pass
+                    else:
+                        await asyncio.sleep(1)
+
+                    # Periodic health check every 30 seconds
+                    if int(time.time()) % 30 == 0:
                         await conn.execute("SELECT 1")
 
                 except asyncio.CancelledError:
