@@ -1,17 +1,17 @@
 """
 Authentication and token management for Databricks Lakebase connections.
 
-This module handles OAuth token generation, refresh, and database instance management
-for secure connections to Databricks Lakebase PostgreSQL instances.
+This module handles OAuth token generation, refresh, and endpoint management
+for secure connections to Databricks Lakebase Autoscaling PostgreSQL endpoints.
 """
 
 import asyncio
 import logging
 import os
 import time
-import uuid
 from typing import Optional
 
+import psycopg
 from databricks.sdk import WorkspaceClient
 from dotenv import load_dotenv
 
@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 
 # Global variables for OAuth token management
 workspace_client: Optional[WorkspaceClient] = None
-database_instance = None
 postgres_password: Optional[str] = None
 last_password_refresh: float = 0
 token_refresh_task: Optional[asyncio.Task] = None
@@ -28,23 +27,16 @@ token_refresh_event: Optional[asyncio.Event] = None
 
 
 async def initialize_databricks_client():
-    """Initialize Databricks workspace client and get database instance"""
-    global workspace_client, database_instance
+    """Initialize Databricks workspace client."""
+    global workspace_client
 
     try:
         workspace_client = WorkspaceClient()
-        logger.info("Initialized Databricks workspace client")
-
-        instance_name = os.getenv("LAKEBASE_INSTANCE_NAME")
-        if not instance_name:
-            raise RuntimeError(
-                "LAKEBASE_INSTANCE_NAME environment variable is required"
-            )
-
-        database_instance = workspace_client.database.get_database_instance(
-            name=instance_name
+        current_user = workspace_client.current_user.me()
+        logger.info(
+            f"Initialized Databricks workspace client as: "
+            f"{current_user.user_name} (id={current_user.id})"
         )
-        logger.info(f"Found database instance: {database_instance.name}")
 
     except Exception as e:
         logger.error(f"Failed to initialize Databricks client: {e}")
@@ -52,23 +44,25 @@ async def initialize_databricks_client():
 
 
 async def generate_fresh_token():
-    """Generate a fresh OAuth token for PostgreSQL"""
+    """Generate a fresh OAuth token for PostgreSQL via the SDK postgres service."""
     global postgres_password, last_password_refresh
 
-    if workspace_client is None or database_instance is None:
+    if workspace_client is None:
         await initialize_databricks_client()
 
     try:
-        logger.info("Generating fresh PostgreSQL OAuth token")
+        logger.info("Generating fresh PostgreSQL OAuth token via SDK")
 
-        # Generate initial credentials using the working pattern
-        cred = workspace_client.database.generate_database_credential(
-            request_id=str(uuid.uuid4()),
-            instance_names=[database_instance.name]
+        endpoint_name = os.environ["ENDPOINT_NAME"]
+        credential = workspace_client.postgres.generate_database_credential(
+            endpoint=endpoint_name
         )
-        postgres_password = cred.token
+        postgres_password = credential.token
         last_password_refresh = time.time()
-        logger.info("OAuth token generated successfully")
+        logger.info(
+            f"OAuth token generated successfully "
+            f"(expires: {credential.expire_time}, length: {len(postgres_password)})"
+        )
         return postgres_password
 
     except Exception as e:
@@ -77,7 +71,7 @@ async def generate_fresh_token():
 
 
 async def refresh_token_background():
-    """Background task to refresh tokens every 50 minutes"""
+    """Background task to refresh tokens every 50 minutes."""
     global token_refresh_event
     retry_count = 0
     max_retries = 3
@@ -88,10 +82,9 @@ async def refresh_token_background():
             logger.info("Background token refresh: Generating fresh PostgreSQL OAuth token")
 
             await generate_fresh_token()
-            retry_count = 0  # Reset retry count on success
+            retry_count = 0
             logger.info("Background token refresh: Token updated successfully")
 
-            # Signal that token was refreshed so listeners can reconnect
             if token_refresh_event:
                 token_refresh_event.set()
                 logger.info("Background token refresh: Signaled database reconnection needed")
@@ -107,31 +100,28 @@ async def refresh_token_background():
             if retry_count >= max_retries:
                 logger.error("Max retries exceeded for token refresh, waiting longer before next attempt")
                 retry_count = 0
-                await asyncio.sleep(5 * 60)  # Wait 5 minutes before retry
+                await asyncio.sleep(5 * 60)
             else:
-                await asyncio.sleep(30)  # Wait 30 seconds before retry
+                await asyncio.sleep(30)
 
 
 async def start_token_refresh():
-    """Start the background token refresh task"""
+    """Start the background token refresh task."""
     global token_refresh_task, token_refresh_event
 
-    # Create event for signaling token refresh
     if token_refresh_event is None:
         token_refresh_event = asyncio.Event()
 
-    # Generate initial token if not already done
     if postgres_password is None:
         await generate_fresh_token()
 
-    # Start background refresh task
     if token_refresh_task is None or token_refresh_task.done():
         token_refresh_task = asyncio.create_task(refresh_token_background())
         logger.info("Background token refresh task started")
 
 
 async def stop_token_refresh():
-    """Stop the background token refresh task"""
+    """Stop the background token refresh task."""
     global token_refresh_task
     if token_refresh_task and not token_refresh_task.done():
         token_refresh_task.cancel()
@@ -143,72 +133,74 @@ async def stop_token_refresh():
 
 
 def check_database_exists() -> bool:
-    """Check if the Lakebase database instance exists"""
-    try:
-        workspace_client_check = WorkspaceClient()
-        instance_name = os.getenv("LAKEBASE_INSTANCE_NAME")
+    """Check if the Lakebase postgres endpoint is configured."""
+    endpoint_name = os.getenv("ENDPOINT_NAME")
+    pghost = os.getenv("PGHOST")
 
-        if not instance_name:
-            logger.warning(
-                "LAKEBASE_INSTANCE_NAME not set - database instance check skipped"
-            )
+    if not endpoint_name or not pghost:
+        logger.warning("ENDPOINT_NAME or PGHOST not set - database check skipped")
+        return False
+
+    try:
+        w = WorkspaceClient()
+        branch_path = "/".join(endpoint_name.split("/")[:4])  # projects/.../branches/...
+        endpoints = list(w.postgres.list_endpoints(branch_path))
+        if endpoints:
+            logger.info(f"Lakebase postgres endpoint is reachable at {pghost}")
+            return True
+        else:
+            logger.info("No endpoints found")
             return False
 
-        workspace_client_check.database.get_database_instance(name=instance_name)
-        logger.info(f"Lakebase database instance '{instance_name}' exists")
-        return True
     except Exception as e:
-        if "not found" in str(e).lower() or "resource not found" in str(e).lower():
-            logger.info(f"Lakebase database instance '{instance_name}' does not exist")
-        else:
-            logger.error(f"Error checking database instance existence: {e}")
+        logger.error(f"Error checking postgres endpoint: {e}")
         return False
 
 
 def get_current_token() -> Optional[str]:
-    """Get the current PostgreSQL password/token"""
+    """Get the current PostgreSQL password/token."""
     return postgres_password
 
 
-def get_database_instance():
-    """Get the current database instance"""
-    return database_instance
-
-
 def get_workspace_client() -> Optional[WorkspaceClient]:
-    """Get the current workspace client"""
+    """Get the current workspace client."""
     return workspace_client
 
 
 def get_token_refresh_event() -> Optional[asyncio.Event]:
-    """Get the token refresh event for monitoring token updates"""
+    """Get the token refresh event for monitoring token updates."""
     return token_refresh_event
 
 
 def get_connection_params() -> dict:
-    """Get database connection parameters from the current database instance"""
-    if database_instance is None:
-        raise RuntimeError("Database instance not initialized")
-
+    """Get database connection parameters for the Autoscaling Lakebase endpoint."""
     if workspace_client is None:
         raise RuntimeError("Workspace client not initialized")
 
-    database_name = os.getenv("LAKEBASE_DATABASE_NAME", database_instance.name)
-    username = (
-        os.getenv("DATABRICKS_CLIENT_ID")
-        or workspace_client.current_user.me().user_name
-        or None
-    )
-
-    # Get schema from environment variable
+    host = os.environ["PGHOST"]
+    port = int(os.environ.get("PGPORT", "5432"))
+    database = os.environ.get("PGDATABASE", "databricks_postgres")
+    username = os.environ["PGUSER"]
     schema = os.getenv("DEFAULT_POSTGRES_SCHEMA", "public")
 
+    # Generate a fresh token for this connection (matching tutorial pattern)
+    endpoint_name = os.environ["ENDPOINT_NAME"]
+    credential = workspace_client.postgres.generate_database_credential(
+        endpoint=endpoint_name
+    )
+    password = credential.token
+
+    logger.info(
+        f"Connection params: host={host}, port={port}, db={database}, "
+        f"user={username}, token_length={len(password)}"
+    )
+
     return {
-        "host": database_instance.read_write_dns,
-        "port": int(os.getenv("DATABRICKS_DATABASE_PORT", "5432")),
+        "host": host,
+        "port": port,
         "user": username,
-        "password": postgres_password,
-        "database": database_name,
-        "ssl": "require",
-        "server_settings": {"search_path": schema},
+        "password": password,
+        "dbname": database,
+        "sslmode": "require",
+        "options": f"-c search_path={schema}",
     }

@@ -17,7 +17,7 @@ import os
 import random
 from datetime import datetime
 
-import asyncpg
+import psycopg
 from auth import (
     generate_fresh_token,
     get_connection_params,
@@ -69,7 +69,7 @@ async def simulate_manufacturing(use_colors: bool = True):
         print(f"{Colors.BLUE}🔗 Connecting to database...{Colors.RESET}")
 
     conn_params = get_connection_params()
-    conn = await asyncpg.connect(**conn_params)
+    conn = await psycopg.AsyncConnection.connect(**conn_params, autocommit=True)
 
     logger.info("Manufacturing simulator connected to database")
     if use_colors:
@@ -110,12 +110,10 @@ async def simulate_manufacturing(use_colors: bool = True):
             await conn.execute(
                 """
                 UPDATE machine_feed_stream
-                SET status = $1, datetime = $2
-                WHERE machine_name = $3
+                SET status = %s, datetime = %s
+                WHERE machine_name = %s
                 """,
-                status,
-                datetime.now(),
-                machine_name,
+                (status, datetime.now(), machine_name),
             )
 
             update_count += 1
@@ -161,6 +159,8 @@ async def simulate_manufacturing(use_colors: bool = True):
         if use_colors:
             print(f"\n\n{Colors.YELLOW}🛑 Stopping simulation...{Colors.RESET}")
             print(f"{Colors.GREEN}Total updates performed: {update_count}{Colors.RESET}")
+    except Exception as e:
+        logger.error(f"Manufacturing simulator crashed: {e}", exc_info=True)
     finally:
         await conn.close()
         logger.info("Manufacturing simulator database connection closed")
