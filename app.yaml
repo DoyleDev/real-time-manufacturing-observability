@@ -1,12 +1,18 @@
 command: ["uvicorn", "app:app"]
 
 env:
-  - name: 'LAKEBASE_INSTANCE_NAME'
-    value: 'mfg-fe-demo'
-  - name: 'LAKEBASE_DATABASE_NAME'
-    value: 'mfg-demo-database'
-  - name: 'DATABRICKS_DATABASE_PORT'
+  - name: 'PGHOST'
+    value: '<your-endpoint-host>'
+  - name: 'PGDATABASE'
+    value: 'databricks_postgres'
+  - name: 'PGUSER'
+    value: '<app-client-id>'
+  - name: 'PGPORT'
     value: '5432'
+  - name: 'PGSSLMODE'
+    value: 'require'
+  - name: 'ENDPOINT_NAME'
+    value: 'projects/machine-floor-project/branches/production/endpoints/primary'
 
   - name: 'DEFAULT_POSTGRES_SCHEMA'
     value: 'public'

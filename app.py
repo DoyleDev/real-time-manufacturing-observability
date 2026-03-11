@@ -1,11 +1,12 @@
 import asyncio
+import json
 import logging
 import os
 import time
 from contextlib import asynccontextmanager
 from typing import Set
 
-import asyncpg
+import psycopg
 from auth import (
     check_database_exists,
     get_connection_params,
@@ -24,7 +25,10 @@ logger = logging.getLogger(__name__)
 
 
 templates = Jinja2Templates(directory="templates")
-db_connection: asyncpg.Connection | None = None
+
+# Separate connections: one for LISTEN (blocking), one for queries
+listener_connection: psycopg.AsyncConnection | None = None
+query_connection: psycopg.AsyncConnection | None = None
 
 
 class ConnectionManager:
@@ -53,121 +57,92 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-async def database_health() -> bool:
-    """Check database connection health"""
-    global db_connection
-
-    if db_connection is None or db_connection.is_closed():
-        logger.error("Database connection is not available")
-        return False
-
-    try:
-        await db_connection.execute("SELECT 1")
-        logger.info("Database connection is healthy")
-        return True
-    except Exception as e:
-        logger.error(f"Database health check failed: {e}")
-        return False
-
-
-async def create_db_connection():
-    """Create a new database connection with current OAuth token"""
-    global db_connection
+async def create_query_connection():
+    """Create a new database connection for queries"""
+    global query_connection
 
     try:
         conn_params = get_connection_params()
-
-        db_connection = await asyncpg.connect(**conn_params)
-        logger.info(
-            f"Database connection established to {conn_params['database']} at {conn_params['host']}"
+        query_connection = await psycopg.AsyncConnection.connect(
+            **conn_params, autocommit=True
         )
-        return db_connection
-
+        logger.info(
+            f"Query connection established to {conn_params['dbname']} at {conn_params['host']}"
+        )
+        return query_connection
     except Exception as e:
-        logger.error(f"Failed to create database connection: {e}")
+        logger.error(f"Failed to create query connection: {e}")
         raise
 
 
-async def ensure_db_connection():
-    """Ensure we have a valid database connection, reconnect if needed"""
-    global db_connection
+async def ensure_query_connection():
+    """Ensure we have a valid query connection, reconnect if needed"""
+    global query_connection
 
-    if db_connection is None or db_connection.is_closed():
-        logger.info("Creating new database connection")
-        await create_db_connection()
+    if query_connection is None or query_connection.closed:
+        logger.info("Creating new query connection")
+        await create_query_connection()
 
     try:
-        await db_connection.execute("SELECT 1")
-        return db_connection
-
+        await query_connection.execute("SELECT 1")
+        return query_connection
     except Exception as e:
-        logger.warning(f"Database connection test failed: {e}")
-        logger.info("Attempting to reconnect")
+        logger.warning(f"Query connection test failed: {e}")
+        if query_connection and not query_connection.closed:
+            await query_connection.close()
+        await create_query_connection()
+        return query_connection
 
-        if db_connection and not db_connection.is_closed():
-            await db_connection.close()
 
-        await create_db_connection()
-        return db_connection
+async def create_listener_connection():
+    """Create a dedicated connection for LISTEN/NOTIFY"""
+    global listener_connection
+
+    try:
+        conn_params = get_connection_params()
+        listener_connection = await psycopg.AsyncConnection.connect(
+            **conn_params, autocommit=True
+        )
+        logger.info("Listener connection established")
+        return listener_connection
+    except Exception as e:
+        logger.error(f"Failed to create listener connection: {e}")
+        raise
 
 
 async def listen_for_changes():
     """Listen for PostgreSQL notifications and broadcast to WebSocket clients"""
+    global listener_connection
     token_event = get_token_refresh_event()
 
     while True:
         try:
-            conn = await ensure_db_connection()
-            await conn.add_listener("machine_feed_stream_changes", notification_handler)
+            await create_listener_connection()
+            conn = listener_connection
+            await conn.execute("LISTEN machine_feed_stream_changes")
             logger.info("Listening for machine_feed_stream changes...")
 
-            while True:
-                try:
-                    # Check if token was refreshed
-                    if token_event:
-                        try:
-                            await asyncio.wait_for(token_event.wait(), timeout=1.0)
-                            # Token was refreshed, need to reconnect
-                            logger.info("Token refresh detected, reconnecting database listener...")
-                            token_event.clear()
+            async for notify in conn.notifies():
+                print(f"Received notification: {notify.payload}")
+                await manager.broadcast(notify.payload)
 
-                            # Close current connection
-                            if conn and not conn.is_closed():
-                                await conn.close()
+                # Check if token was refreshed
+                if token_event and token_event.is_set():
+                    logger.info("Token refresh detected, reconnecting database listener...")
+                    token_event.clear()
 
-                            # Break inner loop to reconnect with new token
-                            break
-                        except asyncio.TimeoutError:
-                            # No token refresh, continue normal operation
-                            pass
-                    else:
-                        await asyncio.sleep(1)
-
-                    # Periodic health check every 30 seconds
-                    if int(time.time()) % 30 == 0:
-                        await conn.execute("SELECT 1")
-
-                except asyncio.CancelledError:
-                    raise
-
-                except Exception as e:
-                    logger.warning(f"Database connection lost: {e}")
+                    if conn and not conn.closed:
+                        await conn.close()
                     break
 
         except asyncio.CancelledError:
-            if db_connection and not db_connection.is_closed():
-                await db_connection.close()
+            if listener_connection and not listener_connection.closed:
+                await listener_connection.close()
             raise
 
         except Exception as e:
             logger.error(f"Error in database listener: {e}")
             await asyncio.sleep(5)
-
-
-async def notification_handler(_connection, _pid, _channel, payload):
-    """Handle database notifications and broadcast to WebSocket clients"""
-    print(f"Received notification: {payload}")
-    await manager.broadcast(payload)
 
 
 @asynccontextmanager
@@ -188,6 +163,9 @@ async def lifespan(_app: FastAPI):
             await initialize_databricks_client()
             await start_token_refresh()
             logger.info("OAuth token management initialized successfully")
+
+            # Create the query connection
+            await create_query_connection()
 
             listener_task = asyncio.create_task(listen_for_changes())
             logger.info("Database listener started")
@@ -232,9 +210,11 @@ async def lifespan(_app: FastAPI):
 
     await stop_token_refresh()
 
-    if db_connection and not db_connection.is_closed():
-        await db_connection.close()
-        logger.info("Database connection closed")
+    if listener_connection and not listener_connection.closed:
+        await listener_connection.close()
+    if query_connection and not query_connection.closed:
+        await query_connection.close()
+        logger.info("Database connections closed")
 
     logger.info("Application shutdown complete")
 
@@ -259,10 +239,8 @@ async def get_machines():
 async def get_current_machine_status():
     """Get current status of all machines from database"""
     try:
-        # Ensure we have a database connection
-        connection = await ensure_db_connection()
+        connection = await ensure_query_connection()
 
-        # Query to get the latest status for each machine
         query = """
         SELECT DISTINCT ON (machine_name)
             machine_name, status, type, datetime
@@ -270,15 +248,16 @@ async def get_current_machine_status():
         ORDER BY machine_name, datetime DESC
         """
 
-        rows = await connection.fetch(query)
+        cur = await connection.execute(query)
+        rows = await cur.fetchall()
 
         # Convert to dictionary format
         status_data = {}
         for row in rows:
-            status_data[row['machine_name']] = {
-                'status': row['status'],
-                'type': row['type'],
-                'datetime': row['datetime'].isoformat() if row['datetime'] else None
+            status_data[row[0]] = {
+                'status': row[1],
+                'type': row[2],
+                'datetime': row[3].isoformat() if row[3] else None
             }
 
         logger.info(f"Retrieved current status for {len(status_data)} machines")
@@ -293,10 +272,8 @@ async def get_current_machine_status():
 async def get_employees():
     """Get list of active employees for assignee dropdown"""
     try:
-        # Ensure we have a database connection
-        connection = await ensure_db_connection()
+        connection = await ensure_query_connection()
 
-        # Query to get active employees ordered by last name, first name
         query = """
         SELECT id, first_name, last_name, email, department
         FROM employees
@@ -304,18 +281,18 @@ async def get_employees():
         ORDER BY last_name, first_name
         """
 
-        rows = await connection.fetch(query)
+        cur = await connection.execute(query)
+        rows = await cur.fetchall()
 
-        # Convert to list of employee objects
         employees = []
         for row in rows:
             employees.append({
-                'id': row['id'],
-                'first_name': row['first_name'],
-                'last_name': row['last_name'],
-                'email': row['email'],
-                'department': row['department'],
-                'full_name': f"{row['first_name']} {row['last_name']}"
+                'id': row[0],
+                'first_name': row[1],
+                'last_name': row[2],
+                'email': row[3],
+                'department': row[4],
+                'full_name': f"{row[1]} {row[2]}"
             })
 
         logger.info(f"Retrieved {len(employees)} active employees")
@@ -330,10 +307,8 @@ async def get_employees():
 async def get_work_orders():
     """Get all work orders from database"""
     try:
-        # Ensure we have a database connection
-        connection = await ensure_db_connection()
+        connection = await ensure_query_connection()
 
-        # Query to get all work orders ordered by created_at DESC
         query = """
         SELECT id, machine_id, issue_description, priority,
                reporter_name, assignee, timestamp, created_at, status
@@ -341,28 +316,27 @@ async def get_work_orders():
         ORDER BY created_at DESC
         """
 
-        rows = await connection.fetch(query)
+        cur = await connection.execute(query)
+        rows = await cur.fetchall()
 
-        # Convert to list of work order objects
         work_orders = []
         status_counts = {'open': 0, 'in_progress': 0, 'completed': 0}
 
         for row in rows:
             work_order = {
-                'id': row['id'],
-                'machine_id': row['machine_id'],
-                'issue_description': row['issue_description'],
-                'priority': row['priority'],
-                'reporter_name': row['reporter_name'],
-                'assignee': row['assignee'] or 'Unassigned',
-                'status': row['status'],
-                'timestamp': row['timestamp'].isoformat() if row['timestamp'] else None,
-                'created_at': row['created_at'].isoformat() if row['created_at'] else None
+                'id': row[0],
+                'machine_id': row[1],
+                'issue_description': row[2],
+                'priority': row[3],
+                'reporter_name': row[4],
+                'assignee': row[5] or 'Unassigned',
+                'status': row[8],
+                'timestamp': row[6].isoformat() if row[6] else None,
+                'created_at': row[7].isoformat() if row[7] else None
             }
             work_orders.append(work_order)
 
-            # Count statuses for statistics
-            status_key = row['status'].replace(' ', '_').lower()
+            status_key = row[8].replace(' ', '_').lower()
             if status_key in status_counts:
                 status_counts[status_key] += 1
 
@@ -382,19 +356,14 @@ async def get_work_orders():
 async def create_work_order(work_order_data: dict):
     """Create a new work order for a machine"""
     try:
-        # Ensure we have a database connection
-        connection = await ensure_db_connection()
+        connection = await ensure_query_connection()
 
-        # Extract required fields
         machine_id = work_order_data.get('machine_id')
         issue_description = work_order_data.get('issue_description')
         priority = work_order_data.get('priority', 'medium')
         reporter_name = work_order_data.get('reporter_name')
         assignee = work_order_data.get('assignee', '')
 
-        logger.info(f"🔧 Work order data received: machine_id='{machine_id}', priority='{priority}', reporter_name='{reporter_name}', assignee='{assignee}'")
-
-        # Validation
         if not machine_id:
             return {"error": "machine_id is required", "success": False}
         if not issue_description:
@@ -402,39 +371,33 @@ async def create_work_order(work_order_data: dict):
         if not reporter_name:
             return {"error": "reporter_name is required", "success": False}
 
-        # Generate work order ID
         import uuid
         from datetime import datetime
 
         work_order_id = f"WO-{datetime.now().strftime('%Y%m%d')}-{str(uuid.uuid4())[:8]}"
         current_timestamp = datetime.now()
 
-        # Insert work order into database
         insert_query = """
         INSERT INTO work_orders (
             id, machine_id, issue_description, priority,
             reporter_name, assignee, timestamp, created_at, status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
 
-        # Ensure data types match schema expectations
-        try:
-            await connection.execute(
-                insert_query,
-                str(work_order_id),           # varchar(50)
-                str(machine_id),              # varchar(100)
-                str(issue_description),       # string
-                str(priority),                # varchar(20)
-                str(reporter_name),           # varchar(100)
-                str(assignee) if assignee else '',  # varchar(100), handle None
-                current_timestamp,            # timestamp
-                current_timestamp,            # timestamp
-                'open'                        # varchar(20) - using lowercase for consistency
-            )
-        except Exception as db_error:
-            logger.error(f"Database insertion failed with detailed error: {db_error}")
-            logger.error(f"Data being inserted: id='{work_order_id}', machine_id='{machine_id}', priority='{priority}', status='open'")
-            raise
+        await connection.execute(
+            insert_query,
+            (
+                str(work_order_id),
+                str(machine_id),
+                str(issue_description),
+                str(priority),
+                str(reporter_name),
+                str(assignee) if assignee else '',
+                current_timestamp,
+                current_timestamp,
+                'open',
+            ),
+        )
 
         logger.info(f"Created work order {work_order_id} for machine {machine_id}")
 
