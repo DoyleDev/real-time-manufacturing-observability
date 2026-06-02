@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches: [main]
     paths:
-      - '**/*.sql'
+      - 'migrations/**/*.sql'
 
 permissions:
   contents: read
@@ -54,7 +54,7 @@ jobs:
       - name: Detect changed SQL files
         id: changed
         run: |
-          FILES=$(git diff --name-only --diff-filter=AM "$PR_BASE_SHA" "$PR_HEAD_SHA" -- '*.sql' | tr '\n' ' ')
+          FILES=$(git diff --name-only --diff-filter=AM "$PR_BASE_SHA" "$PR_HEAD_SHA" -- 'migrations/**/*.sql' | tr '\n' ' ')
           echo "Changed SQL files: $FILES"
           echo "files=$FILES" >> "$GITHUB_OUTPUT"
 

@@ -31,12 +31,12 @@ DATABASE = os.environ.get("LAKEBASE_DATABASE", "databricks_postgres")
 PG_USER = os.environ["LAKEBASE_PG_USER"]
 AI_MODEL = os.environ.get("AI_GATEWAY_MODEL", "databricks-claude-opus-4-7")
 
-PR_NUMBER = os.environ["PR_NUMBER"]
-PR_TITLE = os.environ.get("PR_TITLE", "")
+PR_NUMBER = os.environ.get("PR_NUMBER", "local")
+PR_TITLE = os.environ.get("PR_TITLE", "") or "(local run)"
 PR_BODY = os.environ.get("PR_BODY", "") or ""
-PR_HEAD_REF = os.environ["PR_HEAD_REF"]
-GH_TOKEN = os.environ["GH_TOKEN"]
-GH_REPO = os.environ["GH_REPO"]
+PR_HEAD_REF = os.environ.get("PR_HEAD_REF", "local")
+GH_TOKEN = os.environ.get("GH_TOKEN", "")
+GH_REPO = os.environ.get("GH_REPO", "")
 
 API = f"{DATABRICKS_HOST}/api/2.0/postgres"
 AUTH = {"Authorization": f"Bearer {DATABRICKS_TOKEN}"}
@@ -76,7 +76,7 @@ def wait_operation(op: dict, timeout_s: int = 600) -> dict:
     name = op["name"]
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        r = http("GET", f"{DATABRICKS_HOST}/api/2.0/{name}")
+        r = http("GET", f"{API}/{name}")
         data = r.json()
         if data.get("done"):
             if "error" in data:
@@ -87,6 +87,11 @@ def wait_operation(op: dict, timeout_s: int = 600) -> dict:
 
 
 def create_branch() -> dict:
+    existing = requests.get(f"{API}/{BRANCH_PATH}", headers=JSON_HEADERS, timeout=60)
+    if existing.status_code == 200:
+        print(f"Branch already exists, reusing: {BRANCH_PATH}")
+        return existing.json()
+
     print(f"Creating Lakebase branch: {BRANCH_PATH}")
     payload = {
         "spec": {
@@ -111,24 +116,24 @@ def get_branch() -> dict:
 
 
 def get_primary_endpoint() -> dict:
-    branch = get_branch()
-    endpoints = branch.get("status", {}).get("endpoints", [])
-    primary = next((e for e in endpoints if e.get("type") == "PRIMARY"), None)
-    if not primary:
-        endpoints_list = http("GET", f"{API}/{BRANCH_PATH}/endpoints").json().get("endpoints", [])
-        primary = next((e for e in endpoints_list if e.get("spec", {}).get("type") == "PRIMARY"), None)
-        if not primary:
-            primary = endpoints_list[0] if endpoints_list else None
-    if not primary:
-        raise RuntimeError("No primary endpoint found on branch")
-    ep_name = primary.get("name") or primary.get("endpoint_name")
-    return http("GET", f"{DATABRICKS_HOST}/api/2.0/{ep_name}").json()
+    data = http("GET", f"{API}/{BRANCH_PATH}/endpoints").json()
+    endpoints_list = data.get("endpoints", []) if isinstance(data, dict) else data
+    if not endpoints_list:
+        raise RuntimeError("No endpoints on branch")
+    primary = next(
+        (
+            e for e in endpoints_list
+            if "READ_WRITE" in (e.get("status", {}).get("endpoint_type") or "")
+        ),
+        endpoints_list[0],
+    )
+    return primary
 
 
 def generate_credential(endpoint_name: str) -> str:
     r = http(
         "POST",
-        f"{API}/generateDatabaseCredential",
+        f"{API}/credentials",
         data=json.dumps({"endpoint": endpoint_name}),
     )
     return r.json()["token"]
@@ -325,10 +330,13 @@ def main(sql_files: list[str]) -> int:
 
     comment = render_comment(results, analysis)
     print(comment)
-    try:
-        post_pr_comment(comment)
-    except Exception as e:
-        print(f"::warning::Failed to post PR comment: {e}", file=sys.stderr)
+    if GH_TOKEN and GH_REPO and PR_NUMBER != "local":
+        try:
+            post_pr_comment(comment)
+        except Exception as e:
+            print(f"::warning::Failed to post PR comment: {e}", file=sys.stderr)
+    else:
+        print("\n(Local run: skipping GitHub PR comment.)", file=sys.stderr)
 
     return 0 if all(r.ok for r in results) else 1
 

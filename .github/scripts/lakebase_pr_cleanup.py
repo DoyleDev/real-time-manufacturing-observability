@@ -43,7 +43,7 @@ def main() -> int:
     deadline = time.time() + 300
     while name and time.time() < deadline:
         time.sleep(3)
-        s = requests.get(f"{DATABRICKS_HOST}/api/2.0/{name}", headers=HEADERS, timeout=30)
+        s = requests.get(f"{DATABRICKS_HOST}/api/2.0/postgres/{name}", headers=HEADERS, timeout=30)
         if s.ok and s.json().get("done"):
             print(f"Deleted {BRANCH_PATH}")
             return 0
