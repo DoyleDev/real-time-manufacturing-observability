@@ -30,17 +30,20 @@ if [[ -z "$HOST" ]]; then
   exit 1
 fi
 
-# Mint a PAT-equivalent token from the CLI for this profile.
-TOKEN=$(databricks auth token --profile "$PROFILE" 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
-
-if [[ -z "$TOKEN" ]]; then
-  echo "Could not obtain token via 'databricks auth token --profile $PROFILE'." >&2
-  echo "Run 'databricks auth login --profile $PROFILE' first, or export DATABRICKS_TOKEN manually." >&2
-  exit 1
-fi
-
 export DATABRICKS_HOST="$HOST"
-export DATABRICKS_TOKEN="$TOKEN"
+
+# If DATABRICKS_TOKEN is already set in the environment, use that as-is.
+# Otherwise, mint a short-lived token from the CLI for this profile.
+if [[ -z "${DATABRICKS_TOKEN:-}" ]]; then
+  TOKEN=$(databricks auth token --profile "$PROFILE" 2>/dev/null \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])' 2>/dev/null || true)
+  if [[ -z "$TOKEN" ]]; then
+    echo "Could not obtain token via 'databricks auth token --profile $PROFILE'." >&2
+    echo "Run 'databricks auth login --profile $PROFILE' first, or export DATABRICKS_TOKEN manually." >&2
+    exit 1
+  fi
+  export DATABRICKS_TOKEN="$TOKEN"
+fi
 export LAKEBASE_PROJECT="${LAKEBASE_PROJECT:-machine-floor-project}"
 export LAKEBASE_SOURCE_BRANCH="${LAKEBASE_SOURCE_BRANCH:-production}"
 export LAKEBASE_DATABASE="${LAKEBASE_DATABASE:-databricks_postgres}"

@@ -107,11 +107,15 @@ case "${1:-}" in
     ;;
   [1-9]|0[0-9]|[1-9][0-9] )
     n="$1"
-    src=$(find_stage_file "$n")
-    dest="$MIGRATIONS/$(basename "$src")"
-    if [[ -f "$dest" ]]; then
-      echo "$(basename "$dest") already staged at top level — running validation as-is."
+    padded=$(printf "%03d" "$n")
+    # Prefer a file already at migrations/ top level; otherwise pull from stage/.
+    existing=$(ls -1 "$MIGRATIONS/${padded}_"*.sql 2>/dev/null | head -1 || true)
+    if [[ -n "$existing" ]]; then
+      dest="$existing"
+      echo "$(basename "$dest") already in migrations/ — running validation as-is."
     else
+      src=$(find_stage_file "$n")
+      dest="$MIGRATIONS/$(basename "$src")"
       echo "Staging $(basename "$src") -> migrations/"
       mv "$src" "$dest"
     fi
